@@ -1,10 +1,51 @@
-# YARA-Performance-Guidelines
-A guide on how to write fast and memory friendly YARA rules
+# YARA Performance Guidelines
 
 When creating your rules for YARA keep in mind the following guidelines in order to get the best performance from them.
 This guide is based on ideas and recommendations by Victor M. Alvarez and WXS.
 
 - Revision 1.4, October 2020, applies to all YARA versions higher than 3.7
+
+## The Basics
+To get a better grip on what and where YARA performance can be optimized, it's useful to understand the scanning process. It's basically separated into 4 steps which will be explained very simplified using this examples rule:
+```
+import "math"
+rule example_php_webshell_rule
+{
+    meta:
+        description = "Just an example php webshell rule"
+        date = "2021/02/16"
+    strings:
+        $php_tag = "<?php"
+        $input1   = "GET"
+        $input2   = "POST"
+        $payload = /assert[\t ]{0,100}\(/
+    condition:
+        filesize < 20KB and
+        $php_tag and
+        $payload and
+        any of ( $input* ) and
+        math.entropy(500, filesize-500) >= 5
+}
+```
+### 1. Compiling the rules
+This step happens before the actual scan. YARA will look for so called `atoms` in the search strings to feed the Aho-Corasick automaton. The details are explained in the chapter [atom](#atoms) but for now it's enough to know, that they're maximum 4 bytes longs and YARA picks them quite cleverly to avoid too many matches. In our example YARA might pick the following 4 atoms:
+* `<?ph`
+* `GET`
+* `POST`
+* `sser` (out of `assert`)
+
+### 2. Aho-Corasick automaton 
+
+Here the scan has started. Steps 2.-4. will be executed on all files. YARA will look in each file for the 4 atoms defined above. Any matches are handed over to the bytecode engine.
+
+### 3. Bytecode engine
+If there's e.g. a match on `sser`, YARA will check if it was prefixed by an `a` and continues with a `t`. If that is true, it will follow on with the regex `[\t ]{0,100}\(`. With this clever approach YARA avoids going with a slow regex engine over the complete files and just picks certain parts to look closer.
+
+### 4. Conditions
+After all pattern matching is done, the conditions are checked. 
+YARA has another optimization mechanism to only do the CPU intense `math.entropy` check from our example rule, if the 4 conditions before it are satisfied. Explained in more details in the chapter [Conditions and Short-Circuit Evaluation](#conditions-and-short-circuit-evaluation)
+
+If the conditions are satisfied, a match is reported. The scan continues with the next file in step 2.
 
 ## Atoms
 
@@ -15,12 +56,12 @@ For example, consider this strings:
 ```
 /abc.*cde/
 ``` 
-=> posible atoms are `abc` and `cde`, either one or the other can be used
+=> possible atoms are `abc` and `cde`, either one or the other can be used
 
 ```
 /(one|two)three/
 ```
-=> posible atoms are `one`, `two` and `three`, we can search for `three` alone, or for both `one` and `two`
+=> possible atoms are `one`, `two` and `three`, we can search for `three` alone, or for both `one` and `two`
 
 YARA does its best effort to select the best atoms from each string, for example:
 
@@ -116,7 +157,7 @@ error scanning yara-killer.dat: string "$mz" in rule "shitty_mz" caused too many
 
 ## String Advices
 
-Try to describe string definitions as narrow as possible. Avoid the "nocase" attribute if possible, because many atoms will be generated and searched for (higher memory usage, more iterations). Remember, in the absence of modifiers "ascii" is assumed by default. The posible combinations are:
+Try to describe string definitions as narrow as possible. Avoid the "nocase" attribute if possible, because many atoms will be generated and searched for (higher memory usage, more iterations). Remember, in the absence of modifiers "ascii" is assumed by default. The possible combinations are:
 
 **LOW** - only one [atom](#atoms) is generated
 ```
@@ -127,10 +168,15 @@ $s4 = "cmd.exe" ascii wide     // (both ascii and UTF-16) two atoms will be gene
 $s5 = { 63 6d 64 2e 65 78 65 } // ascii char code in hex
 ```
 
-**HIGH** - many [atoms](#atoms) will be generated
+**HIGH** - All combinations of upper and lowercase letters for the 4 bytes chosen by YARA will be generated as [atoms](#atoms)
 ```
-$s5 = "cmd.exe" nocase      (all different cases, e.g. "Cmd.exe", "cMd.exe", "cmD.exe" ..)
+$s5 = "cmd.exe" nocase      (all different cases, e.g. "Cmd.", "cMd.", "cmD." ..)
 ```
+If you want to match scripting commands, check if the language is case insensitive at all (e.g. php, Windows batch) before using `nocase`. If you just need different casing for just one or two letters, you're better off with a regex, e.g.
+```
+$ = /[Pp]assword/
+```
+
 
 ## Regular Expressions
 
@@ -138,7 +184,21 @@ Use expressions only when necessary. [Regular expression](https://yara.readthedo
 
 If you have to use regular expressions avoid greedy `.*` and even reluctant quantifiers `.*?`. Instead use exact numbers like `.{1,30}` or even `.{1,3000}`.
 
-Also try to include long sequences of strings that could serve as ankers in the matching progress. Again, the longer the better. 
+If you want to make sure, that e.g. `exec` is followed by `/bin/sh`, you can use the offsets supplied by the `@` symbol. This would be the slow regex version:
+```
+$ = /exec.*\/bin\/sh/
+```
+This is the faster offset way:
+```
+strings:
+  $exec = "exec" 
+  $sh   = "/bin/sh"
+conditions:
+  $exec and $sh and
+  @exec < @sh
+```
+
+Also try to include long sequences of strings that could serve as anchors in the matching progress. Again, the longer the better. 
 
 BAD
 ```
@@ -157,7 +217,7 @@ $s1 = /mshta\.exe http:\/\/[a-z0-9\.\/]{3,70}\.hta/
 
 ## Conditions and Short-Circuit Evaluation
 
-Try to write condition statements in which the elements that are most likely to be "False" are placed first. The condition is evaluated from left to right. The sooner the engine identifies that a rule is not satisfied the sooner it can skip the current rule and evaluate the next one. The speed improvement caused by this way to order the condition statements depends on the difference in necessary CPU cycles to process each of the satements. If all statements are more or less equally expensive, reordering the statements causes no noticeable improvement. If one of the statements can be processed very fast it is recommended to place it first in order to skip the expensive statement evaluation in cases in which the first statment is FALSE. 
+Try to write condition statements in which the elements that are most likely to be "False" are placed first. The condition is evaluated from left to right. The sooner the engine identifies that a rule is not satisfied the sooner it can skip the current rule and evaluate the next one. The speed improvement caused by this way to order the condition statements depends on the difference in necessary CPU cycles to process each of the statements. If all statements are more or less equally expensive, reordering the statements causes no noticeable improvement. If one of the statements can be processed very fast it is recommended to place it first in order to skip the expensive statement evaluation in cases in which the first statement is FALSE. 
 
 Changing the order in the following statement does not cause a significant improvement: 
 
@@ -197,4 +257,19 @@ $mz at 0 and filesize < 100K and for all i in (1..filesize) : ( whatever )
 
 This way a higher bound to the number of iterations is set.
 
+### No Short-Circuit for Regular Expressions
+
+Sadly this does not work with regular expressions because they're all initially fed into the string matching engine. The following example will slow down the search for any file and not just for those with filesize smaller than 200 bytes:
+```
+strings:
+  $expensive_regex = /\$[a-z0-9_]+\(/ nocase
+conditions:
+  filesize < 200 and
+  $expensive_regex
+```
+
 This "short-circuit" evaluation is applied since YARA version 3.4.
+
+## Metadata
+
+Any data in the metadata section is read into the RAM by YARA. (You can easily test this by inserting 100,000 hashes into a rule and check the RAM usage of the YARA scan before and after.) Of course you don't want to permanently remove the metadata from the rules but if you're short on RAM, you could remove some unneeded parts of it in your workflow directly prior to scanning.
