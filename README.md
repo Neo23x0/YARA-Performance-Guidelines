@@ -3,7 +3,7 @@
 When creating your rules for YARA keep in mind the following guidelines in order to get the best performance from them.
 This guide is based on ideas and recommendations by Victor M. Alvarez and WXS.
 
-- Revision 1.4, October 2020, applies to all YARA versions higher than 3.7
+- Revision 1.5, February 2021, applies to all YARA versions higher than 3.7
 
 ## The Basics
 To get a better grip on what and where YARA performance can be optimized, it's useful to understand the scanning process. It's basically separated into 4 steps which will be explained very simplified using this examples rule:
