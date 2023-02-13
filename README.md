@@ -7,7 +7,7 @@ This guide is based on ideas and recommendations by Victor M. Alvarez and WXS.
 
 ## The Basics
 To get a better grip on what and where YARA performance can be optimized, it's useful to understand the scanning process. It's basically separated into 4 steps which will be explained very simplified using this examples rule:
-```
+```yara
 import "math"
 rule example_php_webshell_rule
 {
@@ -53,24 +53,24 @@ YARA extracts from the strings short substrings up to 4 bytes long that are call
 
 For example, consider this strings:
 
-```
+```yara
 /abc.*cde/
 ```
 => possible atoms are `abc` and `cde`, either one or the other can be used The `abc` atom is currently preferred because they have the same quality and it is the first of the two. 
 
-```
+```yara
 /(one|two)three/
 ```
 => possible atoms are `one`, `two`, `thre` and `hree`, we can search for `thre` (or `hree`) alone, or for both `one` and `two`. Atom `thre` is preferred because it will lead to less potential matches then `one` and `two` (these are shorter) and it does not contain double `e` (more unique letter the better).
 
 YARA does its best effort to select the best atoms from each string, for example:
 
-```
+```yara
 { 00 00 00 00 [1-4] 01 02 03 04 }
 ```
 => here YARA uses the atom `01 02 03 04`, because `00 00 00 00` is too common
 
-```
+```yara
 { 01 02 [1-4] 01 02 03 04 }
 ```
 => `01 02 03 04` is preferred over `01 02` because it's longer
@@ -78,7 +78,7 @@ YARA does its best effort to select the best atoms from each string, for example
 So, the important point is that strings should contain good atoms.
 These are bad strings because they contain either too short or too common atoms:
 
-```
+```yara
 {00 00 00 00 [1-2] FF FF [1-2] 00 00 00 00}
 {AB  [1-2] 03 21 [1-2] 01 02}
 /a.*b/
@@ -87,7 +87,7 @@ These are bad strings because they contain either too short or too common atoms:
 
 The worst strings are those that don't contain any atoms at all, like:
 
-```
+```yara
 /\w.*\d/
 /[0-9]+\n/
 ```
@@ -98,7 +98,7 @@ This regular expression don't contain any fixed substring that can be used as at
 
 Another good import recommendation is to avoid for [loops](https://yara.readthedocs.io/en/v3.9.0/writingrules.html#iterating-over-string-occurrences) with too many iterations, specially of the statement within the loop is too complex, for example:
 
-```
+```yara
 strings:
 	$a = {00 00}
 condition:
@@ -109,7 +109,7 @@ This rule has two problems. The first is that the string $a is too common, the s
 
 This other condition is also inefficient because the number of iterations depends on filesize, which can be also very high:
 
-```
+```yara
 for all i in (1..filesize) : ($a at i)
 ```
 
@@ -119,7 +119,7 @@ Avoid using the ["magic" module](https://yara.readthedocs.org/en/v3.3.0/modules/
 
 Custom GIF magic header definition:
 
-```
+```yara
 rule gif_1 {
   condition:
     (uint32be(0) == 0x47494638 and uint16be(4) == 0x3961) or
@@ -129,7 +129,7 @@ rule gif_1 {
 
 Using the "[magic](https://yara.readthedocs.io/en/v3.9.0/modules/magic.html)" module:
 
-```
+```yara
 import "magic"
 rule gif_2 {
   condition:
@@ -145,13 +145,13 @@ Avoid defining too short strings. Any string with less than 4 bytes will probabl
 
 Some strings are long enough but shouldn't be used due to a different reason - uniformity. These are some examples for strings that shouldn't be used as they could cause too many matches in files. 
 
-```
+```yara
 $s1 = "22222222222222222222222222222222222222222222222222222222222222"
 $s2 = "\x00\x20\x00\x20\x00\x20\x00\x20\x00\x20\x00\x20\x00\x20"  // wide formatted spaces
 ```
 
 Error message would look like:
-```
+```yara
 error scanning yara-killer.dat: string "$mz" in rule "shitty_mz" caused too many matches
 ```
 
@@ -161,7 +161,7 @@ Try to describe string definitions as narrow as possible. Avoid the "nocase" att
 
 **LOW** - only one [atom](#atoms) is generated
 
-```
+```yara
 $s1 = "cmd.exe"		       // (ascii only)
 $s2 = "cmd.exe" ascii          // (ascii only, same as $s1)
 $s3 = "cmd.exe" wide           // (UTF-16 only)
@@ -171,17 +171,17 @@ $s5 = { 63 6d 64 2e 65 78 65 } // ascii char code in hex
 
 **HIGH** - All combinations of upper and lowercase letters for the 4 bytes chosen by YARA will be generated as [atoms](#atoms)
 
-```
+```yara
 $s5 = "cmd.exe" nocase      (all different cases, e.g. "Cmd.", "cMd.", "cmD." ..)
 ```
 If you want to match scripting commands, check if the language is case insensitive at all (e.g. php, Windows batch) before using `nocase`. If you just need different casing for just one or two letters, you're better off with a regex, e.g.
-```
+```yara
 $re = /[Pp]assword/
 ```
 
 Be careful when working with alternation such as:
 
-```
+```yara
 $re = /(a|b)cde/
 $hex = {C7 C3 00 (31 | 33)}
 ```
@@ -189,7 +189,7 @@ $hex = {C7 C3 00 (31 | 33)}
 These strings generate short atoms that can slow down scanning.
 In cases where there are a small numbers of variant, is it recommended to write the string separately:
 
-```
+```yara
 $re1 = /acde/
 $re2 = /bcde/
 $hex1 = {C7 C3 00 31}
@@ -198,9 +198,9 @@ $hex2 = {C7 C3 00 33}
 
 ## Regular Expressions
 
-Use expressions only when necessary. [Regular expression](https://yara.readthedocs.io/en/v3.9.0/writingrules.html#regular-expressions) evaluation is inherently slower than plain string matching and consumes a **significant amount of memory**. Don't use them if hex strings with jumps and wild-cards can solve the problem.
+Use regular expressions only when necessary. [Regular expression](https://yara.readthedocs.io/en/v3.9.0/writingrules.html#regular-expressions) evaluation is inherently slower than plain string matching and consumes a **significant amount of memory**. Don't use them if hex strings with jumps and wild-cards can solve the problem.
 
-If you have to use regular expressions avoid greedy `.*` and even reluctant quantifiers `.*?`. Instead use exact numbers like `.{1,30}` or even `.{1,3000}`. Also, do not forget the upper bound (e.g. `.{2,}`).
+If you have to use regular expressions avoid greedy `.*` and even reluctant quantifiers `.*?`. Instead use exact numbers like `.{1,30}` or even `.{1,3000}`. Also, do not forget the upper bound (avoid e.g. `.{2,}`).
 
 When we are using quantifiers, two situations can happen:
 
@@ -208,7 +208,7 @@ If the beginning of the regular expressions is anchored on one position and the 
 
 If there are more possible beginnings of the regular expression, YARA will match **all of them**. 
 
-```
+```yara
 $re1 = /Tom.{0,2}/		// will find Tomxx in "Tomxx"
 $re2 = /.{0,2}Tom/      // will find Tom, xTom, xxTom in "xxTom"
 ```
@@ -219,7 +219,7 @@ The following example is the regular expression for an e-mail address. When usin
 
 USE
 
-```
+```yara
 /[-a-z0-9._%+]@[-a-z0-9.]{2,10}\.[a-z]{2,4}/
 OR
 /@[-a-z0-9.]{2,10}\.[a-z]{2,4}/ 
@@ -227,18 +227,18 @@ OR
 
 AVOID
 
-```
+```yara
 /[-a-z0-9._%+]*@[-a-z0-9.]{2,10}\.[a-z]{2,4}/
 /[-a-z0-9._%+]+@[-a-z0-9.]{2,10}\.[a-z]{2,4}/
 /[-a-z0-9._%+]{x,y}@[-a-z0-9.]{2,10}\.[a-z]{2,4}/
 ```
 
 If you want to make sure, that e.g. `exec` is followed by `/bin/sh`, you can use the offsets supplied by the `@` symbol. This would be the slow regex version:
-```
+```yara
 $ = /exec.*\/bin\/sh/
 ```
 This is the faster offset way:
-```
+```yara
 strings:
   $exec = "exec" 
   $sh   = "/bin/sh"
@@ -250,17 +250,17 @@ conditions:
 Also try to include long sequences of strings that could serve as anchors in the matching progress. Again, the longer the better. 
 
 BAD
-```
+```yara
 $s1 = /http:\/\/[.]*\.hta/	// greedy [.]*
 ```
 
 BETTER
-```
+```yara
 $s1 = /http:\/\/[a-z0-9\.\/]{3,70}\.hta/ 	// better, with an the upper bound
 ```
 
 BEST
-```
+```yara
 $s1 = /mshta\.exe http:\/\/[a-z0-9\.\/]{3,70}\.hta/
 ```
 
@@ -289,27 +289,27 @@ Try to write condition statements in which the elements that are most likely to 
 
 Changing the order in the following statement does not cause a significant improvement: 
 
-```
+```yara
 $string1 and $string2 and uint16(0) == 0x5A4D
 ```
 
 However, if the execution time of the statements is very different, reordering in order to trigger the short-circuit will improve the scan speed significantly:
 
 **SLOW**   
-```
-EXPENSIVE and CHEAP
+```yara
+// EXPENSIVE and CHEAP
 math.entropy(0, filesize) > 7.0 and uint16(0) == 0x5A4D
 ```
 
 **FAST**
-```
-CHEAP and EXPENSIVE
+```yara
+// CHEAP and EXPENSIVE
 uint16(0) == 0x5A4D and math.entropy(0, filesize) > 7.0
 ```
 
 Short-circuit evaluation was introduced to help optimizing expensive sentences, particularly "for" sentences. Some people were using conditions like the one in the following example:
 
-```
+```yara
 strings:
 	$mz = "MZ"
 	...
@@ -319,7 +319,7 @@ condition:
 
 Because filesize can be a very big number, "whatever" can be executed a lot of times, slowing down the execution. Now, with short-circuit evaluation, the "for" sentence will be executed only if the first part of the condition is met, so, this rule will be slow only for MZ files. An additional improvement could be: 
 
-```
+```yara
 $mz at 0 and filesize < 100KB and for all i in (1..filesize) : ( whatever )
 ```
 
@@ -327,7 +327,7 @@ This way a higher bound to the number of iterations is set.
 
 From version 3.10, the integer range loops were also optimized:
 
-```
+```yara
 for all i in (0..100): (false)
 for any i in (0..100): (true)
 
@@ -337,7 +337,7 @@ Both of these loops will stop iterating after the first time through.
 ### No Short-Circuit for Regular Expressions
 
 Sadly this does not work with regular expressions because they're all initially fed into the string matching engine. The following example will slow down the search for any file and not just for those with filesize smaller than 200 bytes:
-```
+```yara
 strings:
   $expensive_regex = /\$[a-z0-9_]+\(/ nocase
 conditions:
