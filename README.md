@@ -7,7 +7,7 @@ This guide is based on ideas and recommendations by Victor M. Alvarez and WXS.
 
 ## The Basics
 To get a better grip on what and where YARA performance can be optimized, it's useful to understand the scanning process. It's basically separated into 4 steps which will be explained very simplified using this examples rule:
-```
+```yara
 import "math"
 rule example_php_webshell_rule
 {
@@ -98,7 +98,7 @@ This regular expression don't contain any fixed substring that can be used as at
 
 Another good import recommendation is to avoid for [loops](https://yara.readthedocs.io/en/v3.9.0/writingrules.html#iterating-over-string-occurrences) with too many iterations, specially of the statement within the loop is too complex, for example:
 
-```
+```yara
 strings:
 	$a = {00 00}
 condition:
@@ -119,7 +119,7 @@ Avoid using the ["magic" module](https://yara.readthedocs.org/en/v3.3.0/modules/
 
 Custom GIF magic header definition:
 
-```
+```yara
 rule gif_1 {
   condition:
     (uint32be(0) == 0x47494638 and uint16be(4) == 0x3961) or
@@ -129,7 +129,7 @@ rule gif_1 {
 
 Using the "[magic](https://yara.readthedocs.io/en/v3.9.0/modules/magic.html)" module:
 
-```
+```yara
 import "magic"
 rule gif_2 {
   condition:
@@ -198,9 +198,9 @@ $hex2 = {C7 C3 00 33}
 
 ## Regular Expressions
 
-Use expressions only when necessary. [Regular expression](https://yara.readthedocs.io/en/v3.9.0/writingrules.html#regular-expressions) evaluation is inherently slower than plain string matching and consumes a **significant amount of memory**. Don't use them if hex strings with jumps and wild-cards can solve the problem.
+Use regular expressions only when necessary. [Regular expression](https://yara.readthedocs.io/en/v3.9.0/writingrules.html#regular-expressions) evaluation is inherently slower than plain string matching and consumes a **significant amount of memory**. Don't use them if hex strings with jumps and wild-cards can solve the problem.
 
-If you have to use regular expressions avoid greedy `.*` and even reluctant quantifiers `.*?`. Instead use exact numbers like `.{1,30}` or even `.{1,3000}`. Also, do not forget the upper bound (e.g. `.{2,}`).
+If you have to use regular expressions avoid greedy `.*` and even reluctant quantifiers `.*?`. Instead use exact numbers like `.{1,30}` or even `.{1,3000}`. Also, do not forget the upper bound (avoid e.g. `.{2,}`).
 
 When we are using quantifiers, two situations can happen:
 
@@ -297,13 +297,13 @@ However, if the execution time of the statements is very different, reordering i
 
 **SLOW**   
 ```
-EXPENSIVE and CHEAP
+// EXPENSIVE and CHEAP
 math.entropy(0, filesize) > 7.0 and uint16(0) == 0x5A4D
 ```
 
 **FAST**
 ```
-CHEAP and EXPENSIVE
+// CHEAP and EXPENSIVE
 uint16(0) == 0x5A4D and math.entropy(0, filesize) > 7.0
 ```
 
