@@ -1,7 +1,6 @@
 # YARA Performance Guidelines
 
-When creating your rules for YARA keep in mind the following guidelines in order to get the best performance from them.
-This guide is based on ideas and recommendations by Victor M. Alvarez and WXS.
+Writing efficient YARA rules is essential for maintaining fast and accurate scanning performance. This guide provides key principles and best practices to help you optimize your rules, reduce unnecessary computation, and avoid common pitfalls. It incorporates insights from industry experts, including Victor M. Alvarez, WXS, and contributions from the YARA community.
 
 - Revision 1.6, February 2025, applies to all YARA versions higher than 3.7
 
