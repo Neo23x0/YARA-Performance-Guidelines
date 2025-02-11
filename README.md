@@ -58,7 +58,7 @@ Excessive matches slow down scanning and may trigger **"too many matches" errors
 
 @herrcore has created a helpful video tutorial covering the topics discussed in this performance guide.
 
-[Introduction Into YARA - Writing Efficient YARA Rules](https://x.com/herrcore/status/1874591612598120929)
+[Introduction Into YARA - Writing Efficient YARA Rules](https://www.youtube.com/watch?v=xKeF_cPKXt0)
 
 ## The Basics
 To get a better grip on what and where YARA performance can be optimized, it's useful to understand the scanning process. It's basically separated into 4 steps which will be explained very simplified using this examples rule:
