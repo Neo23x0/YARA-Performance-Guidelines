@@ -54,14 +54,6 @@ Excessive matches slow down scanning and may trigger **"too many matches" errors
 - **Reduce wildcards** in hex strings.  
 - **Split alternations** into separate strings where possible.  
 
-## Final Thoughts  
-✅ Prioritize **efficient string selection** over complex conditions.  
-✅ Optimize **rule structure** to reduce computation.  
-✅ Be mindful of **module overhead** and **regex inefficiencies**.  
-✅ Use **short-circuit evaluation** to speed up execution.  
-
-For a **visual breakdown**, check out @herrcore’s video: **[Insert Video Link]**  
-
 ## Video Tutorial
 
 @herrcore has created a helpful video tutorial covering the topics discussed in this performance guide.
