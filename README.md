@@ -3,13 +3,71 @@
 When creating your rules for YARA keep in mind the following guidelines in order to get the best performance from them.
 This guide is based on ideas and recommendations by Victor M. Alvarez and WXS.
 
-- Revision 1.5, February 2021, applies to all YARA versions higher than 3.7
+- Revision 1.6, February 2025, applies to all YARA versions higher than 3.7
+
+## Key Takeaways  
+
+This section provides a **concise summary** of YARA performance best practices. For **detailed explanations** and examples, refer to the full guide below.  
+
+### Understanding YARA's Scanning Process  
+> *"Think of YARA as a two-step process: first, searching for all patterns listed in the strings, and second, evaluating the conditions. You can’t use well-formed conditions to make up for poorly chosen strings."*  
+> — Wesley Shields  
+
+YARA follows **four main steps** when scanning a file:  
+1. **Compiling the rules** – Extracting **atoms** (4-byte substrings) from defined strings.  
+2. **Aho-Corasick search** – Scanning files for those atoms.  
+3. **Bytecode engine** – Verifying full string matches.  
+4. **Condition evaluation** – Checking additional rule logic.  
+
+### String Selection – The Most Important Factor  
+YARA **searches for strings first**, making **string selection** the single most important factor for rule efficiency.  
+
+✅ **Best Practices for Strings:**  
+- **Avoid short strings** (<4 bytes) – They create too many false positives.  
+- **Use unique 4-byte atoms** – YARA relies on them for fast scanning.  
+- **Minimize wildcards in hex strings** – Keep at least one **long concrete segment**.  
+- **Use regex sparingly** – If necessary, include a **fixed 4-byte anchor** to improve efficiency.  
+- **Avoid single-byte repeated patterns** – E.g., `\x00\x00\x00\x00` appears too frequently.  
+- **Use `nocase` carefully** – It generates exponentially more search variations.  
+
+### Optimizing Conditions & Short-Circuiting  
+YARA **evaluates conditions sequentially** and **stops at the first failure**.  
+
+✅ **Best Practices for Conditions:**  
+- **Put quick checks first** (e.g., `filesize < X`) before expensive conditions.  
+- **Avoid loops over large data** (`for all i in (1..filesize)` is inefficient).  
+- **Use direct offsets (`@`) instead of regex for sequence checks.**  
+
+⚠ **Note:** **Regex conditions do not short-circuit** and are always evaluated last.  
+
+### Modules – Use With Caution  
+Modules like `pe`, `elf`, or `magic` **must parse the entire file** before evaluation, increasing scan time.  
+
+✅ **Alternatives:**  
+- Instead of `pe.is_pe`, use `uint16(0) == 0x5A4D` to identify PE files.  
+- Avoid using modules unless deep file inspection is required.  
+
+### Handling Too Many Matches & Slow Scanning  
+Excessive matches slow down scanning and may trigger **"too many matches" errors**.  
+
+✅ **Fixing Inefficient Matches:**  
+- **Check regex quantifiers** – Avoid `.*`, `.+`, or `{x,}` without an upper bound.  
+- **Reduce wildcards** in hex strings.  
+- **Split alternations** into separate strings where possible.  
+
+## Final Thoughts  
+✅ Prioritize **efficient string selection** over complex conditions.  
+✅ Optimize **rule structure** to reduce computation.  
+✅ Be mindful of **module overhead** and **regex inefficiencies**.  
+✅ Use **short-circuit evaluation** to speed up execution.  
+
+For a **visual breakdown**, check out @herrcore’s video: **[Insert Video Link]**  
 
 ## Video Tutorial
 
 @herrcore has created a helpful video tutorial covering the topics discussed in this performance guide.
 
-[Introduction Into YARA - Writing Efficient YARA Rules](https://x.com/herrcore/status/1874591612598120929) 
+[Introduction Into YARA - Writing Efficient YARA Rules](https://x.com/herrcore/status/1874591612598120929)
 
 ## The Basics
 To get a better grip on what and where YARA performance can be optimized, it's useful to understand the scanning process. It's basically separated into 4 steps which will be explained very simplified using this examples rule:
